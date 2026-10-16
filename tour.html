@@ -162,9 +162,11 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    // API 및 Firebase 설정 정보
-    // (본인의 TOUR_API_KEY와 firebaseConfig 키 정보를 채워주세요)
-    const TOUR_API_KEY = "b2d8f3d6a6dd0e285169d5ad17955894fbbc64c9aabbcfb3f97529b7525159b2"; 
+    // -------------------------------------------------------------
+    // API 및 Firebase 설정 (본인의 키로 채워주세요)
+    // -------------------------------------------------------------
+    // Decoding(디코딩) 인증키 사용을 추천합니다.
+    const TOUR_API_KEY = "YOUR_PUBLIC_DATA_API_KEY";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDtao5bBkG8Zc96fVJsw_2YiUrXm22c6-U",
@@ -226,44 +228,44 @@
       saveSelectionToFirebase(areaCode, areaName);
     });
 
-    // 3. 한국관광공사 TourAPI 데이터 호출 (예외 처리 강화)
-async function fetchAndRenderTourData(areaCode, areaName) {
-  showLoading(true);
-  tourList.innerHTML = "";
+    // 3. 한국관광공사 TourAPI (KorService2 / areaBasedList2) 데이터 호출
+    async function fetchAndRenderTourData(areaCode, areaName) {
+      showLoading(true);
+      tourList.innerHTML = "";
 
-  // Decoding 키 사용 시 encodeURIComponent(TOUR_API_KEY)
-  // Encoding 키 사용 시 TOUR_API_KEY 직접 대입
-  const url = `https://apis.data.go.kr/B551011/KorService2/areaBasedList2?serviceKey=${encodeURIComponent(TOUR_API_KEY)}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&listYN=Y&arrange=A&areaCode=${areaCode}`;
+      // 교수님 지정: KorService2 / areaBasedList2 적용
+      // GitHub Pages 배포를 위해 https:// 사용 및 Decoding 키 기준 encodeURIComponent 적용
+      const url = `https://apis.data.go.kr/B551011/KorService2/areaBasedList2?serviceKey=${encodeURIComponent(TOUR_API_KEY)}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&arrange=A&areaCode=${areaCode}`;
 
-  try {
-    const response = await fetch(url);
-    const data = await response.json();
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
 
-    console.log("API 응답 데이터 확인:", data); // 개발자 도구 Console 탭에서 확인용
+        console.log("API 응답 데이터:", data);
 
-    let items = data.response?.body?.items?.item;
+        let items = data.response?.body?.items?.item;
 
-    if (!items) {
-      statusInfo.textContent = `[${areaName}] 지역의 조회 데이터가 없습니다. (인증키 승인 대기 중이거나 데이터가 없습니다.)`;
-      tourList.classList.add("hidden");
-      return;
+        if (!items) {
+          statusInfo.textContent = `[${areaName}] 지역의 조회 데이터가 없습니다.`;
+          tourList.classList.add("hidden");
+          return;
+        }
+
+        // 응답 데이터가 1개만 들어올 경우 배열화 처리
+        if (!Array.isArray(items)) {
+          items = [items];
+        }
+
+        statusInfo.textContent = `현재 지역: ${areaName} (총 ${items.length}개 표출)`;
+        renderTourCards(items);
+      } catch (error) {
+        console.error("TourAPI 호출 실패:", error);
+        statusInfo.textContent = "관광 정보를 불러오는 중 오류가 발생했습니다.";
+        tourList.classList.add("hidden");
+      } finally {
+        showLoading(false);
+      }
     }
-
-    // 데이터가 1개만 올 경우 배열로 변환
-    if (!Array.isArray(items)) {
-      items = [items];
-    }
-
-    statusInfo.textContent = `현재 지역: ${areaName} (총 ${items.length}개 조회)`;
-    renderTourCards(items);
-  } catch (error) {
-    console.error("TourAPI 호출 실패:", error);
-    statusInfo.textContent = "관광 정보를 불러오는 중 오류가 발생했습니다.";
-    tourList.classList.add("hidden");
-  } finally {
-    showLoading(false);
-  }
-}
 
     // 4. 시각화 목록 뷰 생성 (카드 형태로 표출)
     function renderTourCards(items) {
@@ -272,7 +274,7 @@ async function fetchAndRenderTourData(areaCode, areaName) {
       items.forEach((item) => {
         let imageUrl = item.firstimage || "https://via.placeholder.com/300x180?text=No+Image";
         
-        // 이미지 URL도 https로 변경
+        // 이미지 URL이 http인 경우 https로 스킴 변경
         if (imageUrl.startsWith("http://")) {
           imageUrl = imageUrl.replace("http://", "https://");
         }
