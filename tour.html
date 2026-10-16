@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>지역별 관광 정보 탐색기</title>
   <style>
-    /* ------------------------------------------------------------- */
-    /* 1. 스타일 (CSS)                                               */
-    /* ------------------------------------------------------------- */
+    /* 1. 스타일 (CSS) */
     * {
       box-sizing: border-box;
       margin: 0;
@@ -159,15 +157,14 @@
     <main id="tourList" class="tour-grid hidden"></main>
   </div>
 
-  <!-- ------------------------------------------------------------- -->
-  /* 2. 자바스크립트 및 Firebase 연동 (JS)                        */
-  <!-- ------------------------------------------------------------- -->
+  <!-- 2. 자바스크립트 및 Firebase 연동 (JS) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    // API 및 Firebase 설정 정보 (본인의 정보로 변경하세요)
-    const TOUR_API_KEY = "b2d8f3d6a6dd0e285169d5ad17955894fbbc64c9aabbcfb3f97529b7525159b2"; // 공공데이터포털 일반 인증키 (Encoding 또는 Decoding)
+    // API 및 Firebase 설정 정보
+    // (본인의 TOUR_API_KEY와 firebaseConfig 키 정보를 채워주세요)
+    const TOUR_API_KEY = "b2d8f3d6a6dd0e285169d5ad17955894fbbc64c9aabbcfb3f97529b7525159b2"; 
 
     const firebaseConfig = {
       apiKey: "AIzaSyDtao5bBkG8Zc96fVJsw_2YiUrXm22c6-U",
@@ -205,7 +202,6 @@
             await fetchAndRenderTourData(areaCode, areaName);
           }
         } else {
-          // 저장된 지역 정보가 없는 경우 목록 뷰를 보이지 않도록 처리
           tourList.classList.add("hidden");
           statusInfo.textContent = "저장된 지역 정보가 없습니다. 지역을 선택해주세요.";
         }
@@ -226,19 +222,17 @@
         return;
       }
 
-      // 공공데이터 API 호출 및 화면 출력
       await fetchAndRenderTourData(areaCode, areaName);
-
-      // 선택된 지역 정보 Firebase에 저장/업데이트
       saveSelectionToFirebase(areaCode, areaName);
     });
 
-    // 3. 한국관광공사 TourAPI 데이터 호출
+    // 3. 한국관광공사 TourAPI 데이터 호출 (https 적용)
     async function fetchAndRenderTourData(areaCode, areaName) {
       showLoading(true);
       tourList.innerHTML = "";
 
-      const url = `http://apis.data.go.kr/B551011/KorService2/areaBasedList2?serviceKey=${encodeURIComponent(TOUR_API_KEY)}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&listYN=Y&arrange=A&areaCode=${areaCode}`;
+      // http:// -> https:// 로 변경하여 Mixed Content 에러 방지
+      const url = `https://apis.data.go.kr/B551011/KorService1/areaBasedList1?serviceKey=${encodeURIComponent(TOUR_API_KEY)}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&listYN=Y&arrange=A&areaCode=${areaCode}`;
 
       try {
         const response = await fetch(url);
@@ -268,7 +262,13 @@
       tourList.innerHTML = "";
 
       items.forEach((item) => {
-        const imageUrl = item.firstimage || "https://via.placeholder.com/300x180?text=No+Image";
+        let imageUrl = item.firstimage || "https://via.placeholder.com/300x180?text=No+Image";
+        
+        // 이미지 URL도 https로 변경
+        if (imageUrl.startsWith("http://")) {
+          imageUrl = imageUrl.replace("http://", "https://");
+        }
+
         const title = item.title || "제목 없음";
         const address = item.addr1 || "주소 정보 없음";
 
@@ -284,7 +284,6 @@
         tourList.appendChild(card);
       });
 
-      // 목록 뷰 보이기
       tourList.classList.remove("hidden");
     }
 
