@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 투표 앱 (Realtime Live Poll)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .bar-transition {
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .pulse-once {
+            animation: pulse 0.5s ease-in-out;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between p-4 md:p-8">
+
+    <!-- Header Section -->
+    <header class="max-w-3xl mx-auto w-full text-center my-6">
+        <div class="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-sm font-medium mb-3 border border-indigo-500/20">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="connection-status">실시간 데이터 연동 중</span>
+        </div>
+        <h1 class="text-3xl md:text-5xl font-extrabold text-white tracking-tight mb-2">
+            실시간 실속 투표
+        </h1>
+        <p class="text-slate-400 text-sm md:text-base">
+            원하는 옵션에 투표하고, 실시간으로 업데이트되는 투표 현황을 확인하세요.
+        </p>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="max-w-3xl mx-auto w-full bg-slate-800/80 backdrop-blur-md rounded-2xl p-6 md:p-8 shadow-2xl border border-slate-700/50 mb-8">
+        
+        <!-- Total Votes Summary Header -->
+        <div class="flex justify-between items-end pb-6 mb-6 border-b border-slate-700">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-200">투표 현황</h2>
+                <p id="user-voted-badge" class="text-xs text-amber-400 font-medium hidden mt-1">
+                    <i class="fa-solid fa-check-circle"></i> 이미 투표에 참여하셨습니다.
+                </p>
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold block">총 투표 수</span>
+                <span id="total-votes-count" class="text-3xl font-bold text-indigo-400">0</span>
+            </div>
+        </div>
+
+        <!-- Options Container -->
+        <div id="poll-options-list" class="space-y-4">
+            <!-- Dynamic Options will be rendered here -->
+            <div class="text-center py-8 text-slate-500">
+                <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                <p>투표 데이터를 불러오는 중...</p>
+            </div>
+        </div>
+
+        <!-- Add Custom Option Form -->
+        <div class="mt-8 pt-6 border-t border-slate-700">
+            <h3 class="text-sm font-semibold text-slate-300 mb-3">새로운 투표 항목 추가하기</h3>
+            <form id="add-option-form" class="flex gap-2 flex-col sm:flex-row">
+                <input 
+                    type="text" 
+                    id="new-option-input" 
+                    placeholder="예: C안 또는 새로운 제안 내용" 
+                    class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-slate-100 placeholder-slate-500 transition-colors"
+                    maxlength="50"
+                    required
+                >
+                <button 
+                    type="submit" 
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-6 py-3 rounded-xl text-sm transition-all shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                    <i class="fa-solid fa-plus"></i> 항목 추가
+                </button>
+            </form>
+        </div>
+
+        <!-- Testing & Developer Controls -->
+        <div class="mt-8 pt-4 border-t border-slate-700/50 flex flex-wrap justify-between items-center text-xs text-slate-500 gap-2">
+            <span>* 로컬 스토리지로 내 투표 상태 관리 중</span>
+            <button id="reset-my-vote-btn" class="text-slate-400 hover:text-rose-400 underline transition-colors">
+                [테스트용] 내 투표 상태 초기화
+            </button>
+        </div>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 border border-slate-700 text-slate-100 px-4 py-3 rounded-xl shadow-2xl transition-all transform translate-y-20 opacity-0 pointer-events-none flex items-center gap-3 z-50">
+        <i id="toast-icon" class="fa-solid fa-circle-info text-indigo-400"></i>
+        <span id="toast-message" class="text-sm">메시지 내용</span>
+    </div>
+
+    <!-- Firebase JS SDK Imports (v10 modular syntax via CDN) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+        import { getDatabase, ref, onValue, runTransaction, push, set } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-database.js";
+
+        // ==========================================
+        // 1. Firebase 설정 (GitHub Pages 호스팅 가능)
+        // ==========================================
+        // Firebase 콘솔에서 프로젝트 생성 후 아래 객체를 본인 설정값으로 대체하세요.
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtao5bBkG8Zc96fVJsw_2YiUrXm22c6-U",
+            authDomain: "my-first-app-dcb56.firebaseapp.com",
+            databaseURL: "https://my-first-app-dcb56-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "my-first-app-dcb56",
+            storageBucket: "my-first-app-dcb56.firebasestorage.app",
+            messagingSenderId: "692109813766",
+            appId: "1:692109813766:web:f5798c9a1b44577ecffb87"
+        };
+
+        // 앱 환경 전역 변수로 전달된 설정값 우선 적용 (대화형 데모 환경 호환성 고려)
+        const activeConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : firebaseConfig;
+
+        // Firebase 초기화
+        let app, database;
+        let isFirebaseAvailable = true;
+
+        try {
+            app = initializeApp(activeConfig);
+            database = getDatabase(app);
+        } catch (e) {
+            console.warn("Firebase 커스텀 설정이 준비되지 않아 로컬 인메모리 및 로컬 스토리지 모드로 실행됩니다.", e);
+            isFirebaseAvailable = false;
+        }
+
+        // 앱 내 투표 노드 참조 경로
+        const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-poll';
+        // Firebase 키/경로로 사용할 수 없는 문자(., #, $, [, ]) 제거 및 정제
+        const appId = rawAppId.replace(/[.#$\[\]]/g, '_');
+        const POLL_PATH = `polls/${appId}/options`;
+
+        // ==========================================
+        // 2. 상태 관리 (State)
+        // ==========================================
+        let pollData = {}; // Realtime DB에서 수신할 투표 데이터
+        const LOCAL_STORAGE_VOTE_KEY = `voted_option_${appId}`;
+
+        // UI 요소 DOM 매핑
+        const pollOptionsList = document.getElementById('poll-options-list');
+        const totalVotesCountEl = document.getElementById('total-votes-count');
+        const userVotedBadge = document.getElementById('user-voted-badge');
+        const addOptionForm = document.getElementById('add-option-form');
+        const newOptionInput = document.getElementById('new-option-input');
+        const resetMyVoteBtn = document.getElementById('reset-my-vote-btn');
+        const connectionStatus = document.getElementById('connection-status');
+
+        // ==========================================
+        // 3. 주요 기능 로직 (Business Logic)
+        // ==========================================
+
+        // 기본 데모 데이터 세팅 (DB가 비어있을 경우 초기화)
+        function getInitialOptions() {
+            return {
+                "option_1": { name: "A안 (디자인 개선)", votes: 0 },
+                "option_2": { name: "B안 (신규 기능 추가)", votes: 0 }
+            };
+        }
+
+        // 실시간 실시간 리스너 연결
+        function initRealtimeListener() {
+            if (!isFirebaseAvailable || activeConfig.databaseURL === "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com") {
+                // Firebase 미설정 시 로컬 시뮬레이션
+                connectionStatus.innerText = "로컬 체험 모드 (Firebase 설정 전)";
+                connectionStatus.parentElement.classList.replace('text-indigo-400', 'text-amber-400');
+                
+                const localSaved = localStorage.getItem(`mock_db_${appId}`);
+                pollData = localSaved ? JSON.parse(localSaved) : getInitialOptions();
+                renderPoll();
+                return;
+            }
+
+            const pollRef = ref(database, POLL_PATH);
+
+            onValue(pollRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    pollData = data;
+                } else {
+                    // 데이터가 하나도 없는 경우 초기 옵션 세팅
+                    set(pollRef, getInitialOptions());
+                    pollData = getInitialOptions();
+                }
+                renderPoll();
+            }, (error) => {
+                console.error("Firebase 읽기 실패:", error);
+                showToast("데이터 수신 오류가 발생했습니다.", "error");
+            });
+        }
+
+        // 투표 처리 함수 (카운트 1 증가)
+        async function voteForOption(optionKey) {
+            const myVotedOption = localStorage.getItem(LOCAL_STORAGE_VOTE_KEY);
+
+            if (myVotedOption) {
+                showToast("이미 투표에 참여하셨습니다!", "warning");
+                return;
+            }
+
+            if (isFirebaseAvailable && activeConfig.databaseURL !== "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com") {
+                const voteCountRef = ref(database, `${POLL_PATH}/${optionKey}/votes`);
+                try {
+                    // 트랜잭션을 통한 카운터 동시성 보장
+                    await runTransaction(voteCountRef, (currentVotes) => {
+                        return (currentVotes || 0) + 1;
+                    });
+                    localStorage.setItem(LOCAL_STORAGE_VOTE_KEY, optionKey);
+                    showToast("투표가 성공적으로 반영되었습니다!", "success");
+                } catch (error) {
+                    console.error("투표 트랜잭션 에러:", error);
+                    showToast("투표 처리 중 오류가 발생했습니다.", "error");
+                }
+            } else {
+                // 로컬 모드 처리
+                if (pollData[optionKey]) {
+                    pollData[optionKey].votes += 1;
+                    localStorage.setItem(`mock_db_${appId}`, JSON.stringify(pollData));
+                    localStorage.setItem(LOCAL_STORAGE_VOTE_KEY, optionKey);
+                    showToast("투표가 성공적으로 반영되었습니다! (로컬)", "success");
+                    renderPoll();
+                }
+            }
+        }
+
+        // 새로운 투표 항목 추가
+        async function addNewOption(optionName) {
+            if (!optionName.trim()) return;
+
+            if (isFirebaseAvailable && activeConfig.databaseURL !== "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com") {
+                const pollRef = ref(database, POLL_PATH);
+                const newOptionRef = push(pollRef);
+                try {
+                    await set(newOptionRef, {
+                        name: optionName.trim(),
+                        votes: 0
+                    });
+                    showToast(`'${optionName}' 항목이 추가되었습니다.`, "success");
+                } catch (error) {
+                    console.error("항목 추가 오류:", error);
+                    showToast("항목 추가 실패", "error");
+                }
+            } else {
+                // 로컬 모드 추가
+                const newKey = 'option_' + Date.now();
+                pollData[newKey] = { name: optionName.trim(), votes: 0 };
+                localStorage.setItem(`mock_db_${appId}`, JSON.stringify(pollData));
+                showToast(`'${optionName}' 항목이 추가되었습니다. (로컬)`, "success");
+                renderPoll();
+            }
+        }
+
+        // ==========================================
+        // 4. UI 랜더링 (Rendering)
+        // ==========================================
+
+        // 색상 파렛트 목록 (차트 바 색상 순환 지정)
+        const barColors = [
+            'bg-indigo-500',
+            'bg-emerald-500',
+            'bg-amber-500',
+            'bg-rose-500',
+            'bg-cyan-500',
+            'bg-purple-500',
+            'bg-pink-500'
+        ];
+
+        function renderPoll() {
+            const votedOptionKey = localStorage.getItem(LOCAL_STORAGE_VOTE_KEY);
+            const hasVoted = Boolean(votedOptionKey);
+
+            if (hasVoted) {
+                userVotedBadge.classList.remove('hidden');
+            } else {
+                userVotedBadge.classList.add('hidden');
+            }
+
+            // 총 투표수 계산
+            const optionEntries = Object.entries(pollData || {});
+            const totalVotes = optionEntries.reduce((sum, [_, item]) => sum + (item.votes || 0), 0);
+            totalVotesCountEl.innerText = totalVotes.toLocaleString();
+
+            if (optionEntries.length === 0) {
+                pollOptionsList.innerHTML = `<div class="text-center py-6 text-slate-500">투표 항목이 없습니다. 항목을 새로 추가해보세요!</div>`;
+                return;
+            }
+
+            pollOptionsList.innerHTML = '';
+
+            optionEntries.forEach(([key, item], index) => {
+                const votes = item.votes || 0;
+                const percentage = totalVotes > 0 ? ((votes / totalVotes) * 100).toFixed(1) : '0.0';
+                const isMyChoice = votedOptionKey === key;
+                const colorClass = barColors[index % barColors.length];
+
+                const optionCard = document.createElement('div');
+                optionCard.className = `group relative bg-slate-900/60 rounded-xl p-4 border transition-all ${
+                    isMyChoice 
+                        ? 'border-indigo-500/80 bg-indigo-950/20' 
+                        : 'border-slate-700/60 hover:border-slate-600'
+                }`;
+
+                optionCard.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-slate-100 text-base md:text-lg">
+                                ${escapeHtml(item.name)}
+                            </span>
+                            ${isMyChoice ? `
+                                <span class="bg-indigo-500/20 text-indigo-400 text-xs px-2 py-0.5 rounded-full border border-indigo-500/30">
+                                    내 선택
+                                </span>
+                            ` : ''}
+                        </div>
+                        <div class="flex items-center justify-between sm:justify-end gap-3 text-sm">
+                            <span class="text-slate-400 font-medium">${votes.toLocaleString()}표</span>
+                            <span class="font-bold text-slate-200 min-w-[3.5rem] text-right">${percentage}%</span>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar Container -->
+                    <div class="w-full bg-slate-800 rounded-full h-3.5 overflow-hidden p-0.5 border border-slate-700/30 mb-3">
+                        <div 
+                            class="h-full rounded-full ${colorClass} bar-transition" 
+                            style="width: ${percentage}%"
+                        ></div>
+                    </div>
+
+                    <!-- Vote Action Button -->
+                    <button 
+                        data-key="${key}"
+                        class="vote-btn w-full py-2.5 px-4 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2 ${
+                            hasVoted
+                                ? (isMyChoice 
+                                    ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 cursor-default' 
+                                    : 'bg-slate-800/50 text-slate-500 cursor-not-allowed')
+                                : 'bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white shadow-md shadow-indigo-600/20'
+                        }"
+                        ${hasVoted ? 'disabled' : ''}
+                    >
+                        <i class="fa-solid ${isMyChoice ? 'fa-circle-check' : 'fa-check'}"></i>
+                        ${hasVoted ? (isMyChoice ? '투표 완료' : '투표 완료됨') : '투표하기'}
+                    </button>
+                `;
+
+                pollOptionsList.appendChild(optionCard);
+            });
+
+            // 투표 버튼 이벤트 바인딩
+            document.querySelectorAll('.vote-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const key = e.currentTarget.getAttribute('data-key');
+                    voteForOption(key);
+                });
+            });
+        }
+
+        // ==========================================
+        // 5. 유틸리티 및 이벤트 처리
+        // ==========================================
+
+        // XSS 방지용 HTML 이스케이프
+        function escapeHtml(str) {
+            return str.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+
+        // 토스트 알림 메시지
+        function showToast(message, type = "info") {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMessage.innerText = message;
+
+            if (type === "success") {
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-400";
+            } else if (type === "warning") {
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400";
+            } else if (type === "error") {
+                toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-info text-indigo-400";
+            }
+
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // 폼 제출 이벤트
+        addOptionForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const optionVal = newOptionInput.value;
+            if (optionVal) {
+                addNewOption(optionVal);
+                newOptionInput.value = '';
+            }
+        });
+
+        // 테스트용 투표 리셋
+        resetMyVoteBtn.addEventListener('click', () => {
+            localStorage.removeItem(LOCAL_STORAGE_VOTE_KEY);
+            showToast("투표 이력이 초기화되었습니다. 다시 투표할 수 있습니다.", "info");
+            renderPoll();
+        });
+
+        // 초기 시작
+        window.addEventListener('DOMContentLoaded', () => {
+            initRealtimeListener();
+        });
+    </script>
+</body>
+</html>
