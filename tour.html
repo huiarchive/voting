@@ -233,7 +233,7 @@
 
       // http:// -> https:// 로 변경하여 Mixed Content 에러 방지
       // encodeURIComponent()를 제거하고 serviceKey에 TOUR_API_KEY를 직접 전달합니다.
-      const url = `http://apis.data.go.kr/B551011/KorService2/areaBasedList2?serviceKey=${TOUR_API_KEY}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&listYN=Y&arrange=A&areaCode=${areaCode}`;
+      const url = `https://apis.data.go.kr/B551011/KorService2/areaBasedList2?serviceKey=${TOUR_API_KEY}&numOfRows=20&pageNo=1&MobileOS=ETC&MobileApp=AppTest&_type=json&listYN=Y&arrange=A&areaCode=${areaCode}`;
 
       try {
         const response = await fetch(url);
